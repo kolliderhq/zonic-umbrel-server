@@ -1,0 +1,13 @@
+AVAILABLE_CURRENCIES = ["USD", "BTC"]
+CURRENCY_DENOMINATION_MAP = {
+    "USD": "USD",
+    "BTC": "SATS",
+}
+
+CURRENCY_DP_MAP = {
+    "SATS": 0,
+    "USD": 2,
+    "BTC": 9
+}
+
+TAKER_FEE = 0.00075
