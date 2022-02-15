@@ -112,6 +112,7 @@ wss.on("connection", function connection(ws) {
           msg: "wrong password",
         };
         ws.send(createResponse(data, "authentication"));
+        return
       }
     }
 

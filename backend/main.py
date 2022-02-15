@@ -20,7 +20,6 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from lnurl_auth import perform_lnurlauth
 import hashlib
-from lnd_server import lnd_node_server, lnd_invoice_publisher
 from lnhedgehog import HedgerEngine
 from utils import setup_custom_logger
 
@@ -50,10 +49,6 @@ def main():
     rn_engine = HedgerEngine(lnd_client, logger)
 
     lock = Lock()
-
-    lnd_node_server_thread = threading.Thread(
-        target=lnd_node_server, daemon=True, args=(lnd_client, logger))
-    lnd_node_server_thread.start()
 
     hedger_thread = threading.Thread(
         target=rn_engine.start, daemon=True, args=(settings,))
