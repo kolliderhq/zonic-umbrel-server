@@ -18,12 +18,17 @@ import threading
 from custom_errors import *
 from classes import *
 from constants import *
+import requests
+from lnurl_auth import perform_lnurlauth
+import lnurl
 
 import zmq
 import copy
 
 SOCKET_PUB_ADDRESS = "tcp://*:5559"
 SOCKET_ADDRESS = "tcp://*:5558"
+
+SEED_WORD = hashlib.sha256("cheers to you until all enternity and here is my entry ser.".encode("utf-8")).digest()
 
 def save_to_settings(settings):
     with open(settings["settings_path"], 'w') as outfile:
@@ -690,8 +695,43 @@ class HedgerEngine(KolliderWsClient):
                     continue
 
 
-                if action == "get_funding_history":
-                    pass
+                if action == "lnurl_auth":
+                    decoded_url = lnurl.decode(data["lnurl"])
+                    try:
+                        res = self.lnd_client.sign_message(SEED_WORD)
+                        if res.signature == "":
+                            self.logger.error("Error on lnurl_auth: {}".format(e))
+                            response = {
+                                "type": "lnurl_auth",
+                                "data": {
+                                    "status": "error"
+                                }
+                            }
+                            socket.send_json([response])
+                            return
+                    except Exception as e:
+                        self.logger.error("Error on lnurl_auth: {}".format(e))
+                        response = {
+                            "type": "lnurl_auth",
+                            "data": {
+                                "status": "error"
+                            }
+                        }
+                        socket.send_json([response])
+                        return
+                    lnurl_auth_signature = perform_lnurlauth(res.signature, decoded_url)
+                    try:
+                        _ = requests.get(lnurl_auth_signature)
+                        response = {
+                            "type": "lnurlAuth",
+                            "data": {
+                                "status": "success"
+                            }
+                        }
+                        socket.send_json([response])
+                    except Exception as e:
+                        self.logger.error("Error on lnurl_auth: {}".format(e))
+                    continue
 
                 if action == "get_wallet_state":
                     pass

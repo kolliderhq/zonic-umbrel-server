@@ -124,7 +124,7 @@ wss.on("connection", function connection(ws) {
         action: "lnurl_auth",
         data: { lnurl: d.lnurl },
       };
-      zmqLndRequest(JSON.stringify(msg), onZmqReply);
+      zmqHedgerRequest(JSON.stringify(msg), onZmqReply);
     } else if (d.type === AUTH_HEDGER) {
       const msg = {
         action: "auth_hedger",
