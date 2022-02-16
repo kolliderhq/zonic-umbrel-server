@@ -26,9 +26,9 @@ import zmq
 import copy
 
 SOCKET_PUB_ADDRESS = "tcp://*:5559"
-SOCKET_ADDRESS = "tcp://*:5558"
+SOCKET_SUB_ADDRESS = "tcp://127.0.0.1:5558"
 
-SEED_WORD = hashlib.sha256("cheers to you until all enternity and here is my entry ser.".encode("utf-8")).digest()
+SEED_WORD = hashlib.sha256("cheers to you until all enternity and here is my entry ser. thi is for zonic.".encode("utf-8")).digest()
 
 def save_to_settings(settings):
     with open(settings["settings_path"], 'w') as outfile:
@@ -53,6 +53,7 @@ class HedgerEngine(KolliderWsClient):
         self.contracts = {}
 
         self.is_kollider_authenticated = False
+        self.kollider_withdrawal_state = KolliderWithdrawalState()
 
         self.hedge_value = 0
 
@@ -129,7 +130,7 @@ class HedgerEngine(KolliderWsClient):
             "type": type,
             "data": msg,
         }
-        self.publisher.send_multipart(["hedger_stream".encode("utf-8"), json.dumps([message]).encode("utf-8")])
+        self.publisher.send_multipart(["hedger_sub_stream".encode("utf-8"), json.dumps([message]).encode("utf-8")])
 
     def on_open(self, event):
         self.jwt_auth()
@@ -161,10 +162,14 @@ class HedgerEngine(KolliderWsClient):
         if t == 'authenticate':
             if data["message"] == "success":
                 self.is_kollider_authenticated = True
+                self.who_am_i()
             else:
                 self.logger.info("Kollider auth Unsuccessful: {}".format(data))
                 self.is_kollider_authenticated = False
                 self.__reset()
+
+        elif t == 'whoami':
+            print(data)
 
         elif t == 'index_values':
             self.current_index_price = float(data["value"])
@@ -275,6 +280,10 @@ class HedgerEngine(KolliderWsClient):
             if order_margin is not None:
                 total_balance += float(order_margin)
                 self.master_wallet.update_kollider_cash(cash_balance)
+
+        elif t == 'withdrawal_success':
+            self.logger.debug("Withdrawal success received.")
+            self.kollider_withdrawal_in_process = False
 
         elif t == 'error':
             self.logger.error("Got error: {}".format(msg))
@@ -395,16 +404,24 @@ class HedgerEngine(KolliderWsClient):
         if new_target_dollar_amount < 0:
             self.logger.error("Trying to have negative dollars.")
             msg = {
-                "type": "error",
                 "msg": "You cannot have less dollar than you own."
             }
-            self.publish_msg(msg)
+            self.publish_msg(msg, "error")
             return
         self.target_dollar_amount = new_target_dollar_amount
         self.settings["target_dollar_amount"] = new_target_dollar_amount
         save_to_settings(self.settings)
 
     def make_withdrawal(self, amount, message):
+        if self.kollider_withdrawal_state.in_progress:
+            elapsed = time.time() - self.kollider_withdrawal_state.started
+            self.logger.debug("Elapsed time from when withdrawal started: {}".format(elapsed))
+            if elapsed > 30:
+                self.logger.debug("Stale withdrawal state. Resetting...")
+                self.kollider_withdrawal_state.finished()
+            else:
+                self.logger.debug("Withdrawal ongoing. Waiting to finish or to timeout.")
+                return
         amt = int(amount)
         res = self.lnd_client.add_invoice(amt, message)
         withdrawal_request = {
@@ -416,6 +433,12 @@ class HedgerEngine(KolliderWsClient):
             }
         }
         self.withdrawal_request(withdrawal_request)
+        self.kollider_withdrawal_state.set_in_progress()
+        self.kollider_withdrawal_state.reset_time()
+
+    def sweep_excess_funds_from_kollide(self):
+        if self.master_wallet.kollider_cash > 1:
+            self.make_withdrawal(self.master_wallet.kollider_cash, "Kollider withdrawal")
 
     def cancel_all_orders_on_side(self, side):
         orders = self.open_orders.get(self.target_symbol)
@@ -578,8 +601,9 @@ class HedgerEngine(KolliderWsClient):
     def cli(self):
         self.logger.info("Starting ln-hedghog CLI.")
         context = zmq.Context()
-        socket = context.socket(zmq.REP)
-        socket.bind(SOCKET_ADDRESS)
+        socket = context.socket(zmq.SUB)
+        socket.connect(SOCKET_SUB_ADDRESS)
+        socket.setsockopt(zmq.SUBSCRIBE, b'hedger_pub_stream')
         while True:
             print("cli runs")
             message = ""
@@ -593,41 +617,30 @@ class HedgerEngine(KolliderWsClient):
                 action = message.get("action")
                 data = message.get("data")
                 if action == "get_hedge_state":
-                    response = {
-                        "type": "set_hedge_state",
-                        "data": {
-                                "state": self.to_dict()
-                        }
+                    d = {
+                        "state": self.to_dict()
                     }
-                    socket.send_json(response)
+                    self.publish_msg(d, "setHedgeState")
                     continue
 
                 if action == "get_master_wallet_state":
-                    response = {
-                        "type": "get_master_wallet_state",
-                        "data": {
-                                "state": self.master_wallet.to_dict()
-                        }
+                    d = {
+                        "state": self.master_wallet.to_dict()
                     }
-                    socket.send_json(response)
+                    self.publish_msg(d, "getMasterWalletState")
                     continue
 
                 if action == "get_synth_wallets":
-                    response = {
-                        "type": "getSynthWallets",
-                        "data": {}
+                    d = {
                     }
                     for key, value in self.synth_wallets.items():
-                        response["data"][key] = value.to_dict()
-                    socket.send_json([response])
+                        d[key] = value.to_dict()
+                    self.publish_msg(d, "getSythWallets")
                     continue
 
                 if action == "auth_hedger":
-                    response = {
-                        "type": "authHedger",
-                        "data": {
-                            "status": "success"
-                        }
+                    d = {
+                        "status": "success"
                     }
                     if self.wst:
                         self.logger.debug("closing websockets")
@@ -636,64 +649,51 @@ class HedgerEngine(KolliderWsClient):
                     self.reconnect(self.settings["kollider"]["ws_url"])
                     self.logger.debug("reconnected")
                     self.set_jwt(data["token"])
-                    socket.send_json([response])
+                    self.publish_msg(d, "authHedger")
                     continue
 
                 if action == "make_conversion":
                     if data["is_staged"]:
                         estimation = self.estimate_conversion(data["amount_in_dollar"])
-                        response = {
-                            "type": "makeConversion",
-                            "data": estimation.to_dict()
-                        }
-                        socket.send_json([response])
+                        data = estimation.to_dict()
+                        self.publish_msg(data, "makeConversion")
                         continue
                     else:
                         self.make_conversion(data["amount_in_dollar"])
-
-                    response = {
-                        "type": "make_conversion",
-                        "data": {"status": "acknowledged"}
+                    d = {
+                        "status": "acknowledged"
                     }
-                    socket.send_json([response])
+                    self.publish_msg(data, "makeConversion")
                     continue
 
                 if action == "create_invoice":
                     amount_in_sats = data["amount_in_sats"]
                     memo = data["memo"]
-                    response = {}
+                    d = {}
                     try:
                         resp = self.lnd_client.add_invoice(amount_in_sats, memo)
-                        response = {
-                            "type": "createInvoice",
-                            "data": {"invoice": resp.payment_request}
+                        d = {
+                            "invoice": resp.payment_request
                         }
                     except Exception as e:
-                        response = {
-                            "type": "createInvoice",
-                            "data": {"error": "{}".format(e)}
-                        }
-                    socket.send_json([response])
+                        d = {"error": "{}".format(e)}
+                    self.publish_msg(d, "createInvoice")
                     continue
 
                 if action == "send_payment":
                     payment_request = data["payment_request"]
-                    response = {}
+                    d = {}
                     try:
                         resp = self.lnd_client.send_payment(payment_request)
-                        print(resp)
-                        response = {
-                            "type": "sendPayment",
-                            "data": {"status": "success"}
+                        d = {
+                            "status": "success"
                         }
                     except Exception as e:
-                        response = {
-                            "type": "sendPayment",
-                            "data": {"error": "{}".format(e)}
+                        d = {
+                            "error": "{}".format(e)
                         }
-                    socket.send_json([response])
+                    self.publish_msg(d, "sendPayment")
                     continue
-
 
                 if action == "lnurl_auth":
                     decoded_url = lnurl.decode(data["lnurl"])
@@ -701,41 +701,37 @@ class HedgerEngine(KolliderWsClient):
                         res = self.lnd_client.sign_message(SEED_WORD)
                         if res.signature == "":
                             self.logger.error("Error on lnurl_auth: {}".format(e))
-                            response = {
-                                "type": "lnurl_auth",
-                                "data": {
-                                    "status": "error"
-                                }
+                            d = {
+                                "status": "error"
                             }
-                            socket.send_json([response])
+                            self.publish_msg(d, "lnurlAuth")
                             return
                     except Exception as e:
                         self.logger.error("Error on lnurl_auth: {}".format(e))
-                        response = {
-                            "type": "lnurl_auth",
-                            "data": {
-                                "status": "error"
-                            }
+                        d = {
+                            "status": "error"
                         }
-                        socket.send_json([response])
+                        self.publish_msg(d, "lnurlAuth")
                         return
                     lnurl_auth_signature = perform_lnurlauth(res.signature, decoded_url)
                     try:
                         _ = requests.get(lnurl_auth_signature)
-                        response = {
-                            "type": "lnurlAuth",
-                            "data": {
-                                "status": "success"
-                            }
+                        d = {
+                            "status": "success"
                         }
-                        socket.send_json([response])
+                        self.publish_msg(d, "lnurlAuth")
                     except Exception as e:
                         self.logger.error("Error on lnurl_auth: {}".format(e))
                     continue
 
-                if action == "get_wallet_state":
-                    pass
-            socket.send_json([])
+                if action == "close_account":
+                    self.target_dollar_amount = 0
+                    self.settings["target_dollar_amount"] = 0
+                    save_to_settings(self.settings)
+                    d = {
+                        "status": "closeAccount"
+                    }
+                    self.publish_msg(d, "closeAccount")
 
     def start(self, settings):
         cycle_speed = settings["cycle_speed"]
@@ -782,5 +778,6 @@ class HedgerEngine(KolliderWsClient):
             # Printing the state.
             # Converging to that state.
             self.converge_state(state)
+            self.sweep_excess_funds_from_kollide()
 
             sleep(cycle_speed)

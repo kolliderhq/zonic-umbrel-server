@@ -1,8 +1,5 @@
 {
 	"kollider": {
-		"api_key": "",
-		"api_secret": "",
-		"api_passphrase": "",
 		"ws_url": "wss://api.kollider.xyz/v1/ws/"
 	},
 	"lnd": {

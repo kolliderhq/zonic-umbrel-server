@@ -1,3 +1,5 @@
+import time
+
 class HedgerState(object):
     position_quantity = 0
     ask_open_order_quantity = 0
@@ -116,3 +118,18 @@ class SynthWallet(object):
             "increment": self.increment,
             "dp": self.dp,
         }
+
+
+class KolliderWithdrawalState(object):
+    def __init__(self):
+        self.in_progress = False
+        self.started = time.time()
+
+    def set_in_progress(self):
+        self.in_progress = True
+
+    def finished(self):
+        self.in_progress = False
+    
+    def reset_time(self):
+        self.started = time.time()
