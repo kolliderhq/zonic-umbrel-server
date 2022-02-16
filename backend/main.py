@@ -23,12 +23,8 @@ import hashlib
 from lnhedgehog import HedgerEngine
 from utils import setup_custom_logger
 
-import zmq
-
-
 class ReplaceClearnetUrl(Url):
     allowed_schemes = {"http", "https"}
-
 
 def main():
     lnurl.types.ClearnetUrl = ReplaceClearnetUrl
@@ -55,7 +51,11 @@ def main():
     hedger_thread.start()
 
     while True:
-        pass
+        if not hedger_thread.is_alive():
+            logger.error("Backend thread died. Attempting to recover.")
+            hedger_thread = threading.Thread(
+                target=rn_engine.start, daemon=True, args=(settings,))
+            hedger_thread.start()
 
 
 if __name__ in "__main__":
