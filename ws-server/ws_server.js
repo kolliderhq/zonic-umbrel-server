@@ -19,7 +19,7 @@ const LOGOUT = "logout";
 
 let ZMQ_ADDRESS = "";
 let ZMQ_SUB_ADDRESS = "";
-let ZMQ_HEDGER_ADDRESS = "";
+let ZMQ_HEDGER_PUB_ADDRESS = "";
 
 if (process.env.DEV) {
   ZMQ_SUB_ADDRESS = "tcp://127.0.0.1:5557";
