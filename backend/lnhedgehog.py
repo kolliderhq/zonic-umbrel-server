@@ -24,9 +24,10 @@ import lnurl
 
 import zmq
 import copy
+import os
 
 SOCKET_PUB_ADDRESS = "tcp://*:5559"
-SOCKET_SUB_ADDRESS = "tcp://127.0.0.1:5558"
+SOCKET_SUB_ADDRESS = os.environ.get('ZONIC_ZMQ_SUB_ADDRESS')
 
 SEED_WORD = hashlib.sha256("cheers to you until all enternity and here is my entry ser. thi is for zonic.".encode("utf-8")).digest()
 
