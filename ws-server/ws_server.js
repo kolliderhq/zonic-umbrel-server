@@ -17,17 +17,10 @@ const AUTH_HEDGER = "authHedger";
 const CLOSE_ACCOUNT = "closeAccount";
 const LOGOUT = "logout";
 
-let ZMQ_ADDRESS = "";
-let ZMQ_SUB_ADDRESS = "";
-let ZMQ_HEDGER_PUB_ADDRESS = "";
-
 if (process.env.DEV) {
-  ZMQ_SUB_ADDRESS = "tcp://127.0.0.1:5557";
   ZMQ_HEDGER_PUB_ADDRESS = "tcp://127.0.0.1:5558";
   ZMQ_HEDGER_SUB_ADDRESS = "tcp://127.0.0.1:5559";
 } else {
-  ZMQ_ADDRESS = process.env.ZONIC_ZMQ_ADDRESS;
-  ZMQ_SUB_ADDRESS = process.env.ZONIC_ZMQ_SUB_ADDRESS;
   ZMQ_HEDGER_PUB_ADDRESS = process.env.ZONIC_ZMQ_HEDGER_ADDRESS;
   ZMQ_HEDGER_SUB_ADDRESS = process.env.ZONIC_ZMQ_HEDGER_SUB_ADDRESS;
 }

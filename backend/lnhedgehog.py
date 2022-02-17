@@ -39,8 +39,6 @@ class HedgerEngine(KolliderWsClient):
         self.kollider_api_key = None
         self.kollider_api_secret = None
         self.kollider_api_passphrase = None
-        # Orders that are currently open on the Kollider platform.
-        self.open_orders = {}
         # Positions that are currently open on the Kollider platform.
         self.positions = {}
         self.current_index_price = 0
@@ -87,8 +85,6 @@ class HedgerEngine(KolliderWsClient):
         context = zmq.Context()
         self.publisher = context.socket(zmq.PUB)
         self.publisher.bind(SOCKET_PUB_ADDRESS)
-
-        processingOrder = False
 
         self.settings = {}
         self.logger = logger
@@ -163,6 +159,7 @@ class HedgerEngine(KolliderWsClient):
             if data["message"] == "success":
                 self.is_kollider_authenticated = True
                 self.who_am_i()
+                self.update_wallet_data()
             else:
                 self.logger.info("Kollider auth Unsuccessful: {}".format(data))
                 self.is_kollider_authenticated = False
@@ -183,39 +180,12 @@ class HedgerEngine(KolliderWsClient):
                 self.positions[key] = Position(msg=value)
             self.publish_synth_wallets()
 
-        elif t == 'open_orders':
-            self.logger.debug("Received open orders.")
-            open_orders = data["open_orders"]
-            for symbol, open_orders in open_orders.items():
-                for open_order in open_orders:
-                    if self.open_orders.get(symbol) is None:
-                        self.open_orders[symbol] = []
-                    oo = OpenOrder(msg=open_order)
-                    self.open_orders[symbol].append(oo)
-
         elif t == 'tradable_symbols':
             for symbol, contract in data["symbols"].items():
                 self.contracts[symbol] = TradableSymbol(msg=contract)
             self.received_tradable_symbols = True
 
-        elif t == 'open':
-            open_order = data
-            contract = self.get_contract()
-            dp = contract.price_dp
-            open_order_parsed = OpenOrder(data, dp)
-            if self.open_orders.get(open_order_parsed.symbol) is None:
-                self.open_orders[open_order_parsed.symbol] = []
-            self.open_orders[open_order_parsed.symbol].append(
-                open_order_parsed)
-
-        elif t == 'done':
-            symbol = data["symbol"]
-            order_id = data["order_id"]
-            self.open_orders[symbol] = [
-                open_order for open_order in self.open_orders[symbol] if open_order.order_id != order_id]
-
         elif t == 'fill':
-            order_processing = False
             msg = {
                 "orderId": data["order_id"]
             }
@@ -287,6 +257,11 @@ class HedgerEngine(KolliderWsClient):
 
         elif t == 'error':
             self.logger.error("Got error: {}".format(msg))
+
+    def hydrate_client(self):
+        self.publish_synth_wallets()
+        self.update_master_wallet()
+        self.publish_synth_wallets()
 
     def publish_synth_wallets(self):
         self.update_wallet_data()
@@ -440,17 +415,6 @@ class HedgerEngine(KolliderWsClient):
         if self.master_wallet.kollider_cash > 1:
             self.make_withdrawal(self.master_wallet.kollider_cash, "Kollider withdrawal")
 
-    def cancel_all_orders_on_side(self, side):
-        orders = self.open_orders.get(self.target_symbol)
-
-        if orders is None:
-            return
-
-        for order in orders:
-            if order.side == side:
-                self.cancel_order(
-                    {"order_id": order.order_id, "symbol": self.target_symbol, "settlement_type": "Delayed"})
-
     def calc_number_of_contracts_required(self, value_target):
         try:
             value_per_contract = self.calc_contract_value()
@@ -458,9 +422,6 @@ class HedgerEngine(KolliderWsClient):
             return qty_of_contracts
         except Exception as e:
             self.logger.exception("Got exception on calc_number_of_contracts_required: {}".format(e))
-
-    def get_open_orders(self):
-        return self.open_orders.get(self.target_symbol)
 
     def get_open_position(self):
         return self.positions.get(self.target_symbol)
@@ -477,18 +438,10 @@ class HedgerEngine(KolliderWsClient):
     def build_target_state(self):
         state = HedgerState()
 
-        open_orders = self.get_open_orders()
-
         open_ask_order_quantity = 0
         open_bid_order_quantity = 0
 
         current_position_quantity = 0
-
-        if open_orders is not None:
-            open_bid_order_quantity = sum(
-                [open_order.quantity for open_order in open_orders if open_order.side == "Bid"])
-            open_ask_order_quantity = sum(
-                [open_order.quantity for open_order in open_orders if open_order.side == "Ask"])
 
         # Getting current position on target symbol.
         open_position = self.get_open_position()
@@ -498,8 +451,6 @@ class HedgerEngine(KolliderWsClient):
 
         state.target_quantity = self.target_dollar_amount
         state.target_value = self.calc_contract_value() * self.target_dollar_amount
-        state.bid_open_order_quantity = open_bid_order_quantity
-        state.ask_open_order_quantity = open_ask_order_quantity
         state.position_quantity = current_position_quantity
 
         self.last_state = state
@@ -557,7 +508,6 @@ class HedgerEngine(KolliderWsClient):
         self.logger.debug("New order: {}".format(order))
 
         self.place_order(order)
-        processing_order = True
 
     def print_state(self, state):
         pprint(state.to_dict())
@@ -605,7 +555,6 @@ class HedgerEngine(KolliderWsClient):
         socket.connect(SOCKET_SUB_ADDRESS)
         socket.setsockopt(zmq.SUBSCRIBE, b'hedger_pub_stream')
         while True:
-            print("cli runs")
             message = ""
             try:
                 message = socket.recv_json()
@@ -696,6 +645,7 @@ class HedgerEngine(KolliderWsClient):
                     continue
 
                 if action == "lnurl_auth":
+                    self.logger.debug("Performing lnurl auth.")
                     decoded_url = lnurl.decode(data["lnurl"])
                     try:
                         res = self.lnd_client.sign_message(SEED_WORD)
