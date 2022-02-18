@@ -21,6 +21,7 @@ from constants import *
 import requests
 from lnurl_auth import perform_lnurlauth
 import lnurl
+from historical_data import *
 
 import zmq
 import copy
@@ -55,7 +56,6 @@ class HedgerEngine(KolliderWsClient):
 
         self.hedge_value = 0
 
-        self.target_leverage = 100
         self.target_dollar_amount = 0
 
         # Last hedge state.
@@ -116,8 +116,6 @@ class HedgerEngine(KolliderWsClient):
             "target_symbol") if args.get("target_symbol") else None
         self.target_index_price = args.get("target_index_symbol") if args.get(
             "target_index_symbol") else None
-        self.target_leverage = args.get(
-            "target_leverage") if args.get("target_leverage") else None
         self.order_type = args.get("order_type") if args.get(
             "order_type") else "Market"
 
@@ -153,10 +151,13 @@ class HedgerEngine(KolliderWsClient):
         msg = json.loads(msg)
         t = msg["type"]
         data = msg["data"]
+        print(data)
         # self.logger.debug("Received Kollider msg type: {}".format(t))
         # self.logger.debug("Received Kollider data: {}".format(data))
         if t == 'authenticate':
             if data["message"] == "success":
+                self.logger.info("Authenticated WS successfully.")
+                self.publish_msg({"status": "success"}, "kolliderAuthentication")
                 self.is_kollider_authenticated = True
                 self.who_am_i()
                 self.update_wallet_data()
@@ -257,6 +258,49 @@ class HedgerEngine(KolliderWsClient):
 
         elif t == 'error':
             self.logger.error("Got error: {}".format(msg))
+
+    def authenticate_kollider(self):
+        try:
+            url = self.settings["kollider"]["rest_url"] + "auth/external/lnurl_auth"
+            resp = requests.get(url)
+            link = resp.json()["lnurl_auth"]
+            decoded_url = lnurl.decode(link)
+            try:
+                res = self.lnd_client.sign_message(SEED_WORD)
+                if res.signature == "":
+                    self.logger.error("Error on lnurl_auth: {}".format(e))
+                    d = {
+                        "status": "error"
+                    }
+                    self.publish_msg(d, "lnurlAuth")
+                    return
+            except Exception as e:
+                self.logger.error("Error on lnurl_auth: {}".format(e))
+                d = {
+                    "status": "error"
+                }
+                self.publish_msg(d, "lnurlAuth")
+                return
+            lnurl_auth_signature = perform_lnurlauth(res.signature, decoded_url)
+            try:
+                resp = requests.get(lnurl_auth_signature)
+                self.set_jwt(resp.json()["token"])
+                if self.wst:
+                    self.logger.debug("closing websockets")
+                    self.ws.close()
+                    self.logger.debug("websockets closed")
+                self.reconnect(self.settings["kollider"]["ws_url"])
+            except Exception as e:
+                self.logger.error("Error on lnurl_auth: {}".format(e))
+        except Exception as e:
+            print(e)
+
+    def build_historical_trades_table(self):
+        resp = get_historical_trades(self.settings["kollider"]["rest_url"], self.jwt, "BTCUSD.PERP", 100)
+        response = {}
+        response["data"] = resp
+        response["symbol"] = "BTCUSD.PERP"
+        self.publish_msg(resp, "historicalTrades")
 
     def hydrate_client(self):
         self.publish_synth_wallets()
@@ -498,7 +542,7 @@ class HedgerEngine(KolliderWsClient):
             'symbol': self.target_symbol,
             'side': side,
             'quantity': required_qty,
-            'leverage': self.target_leverage,
+            'leverage': 100,
             'price': price,
             'order_type': self.order_type,
             'margin_type': 'Isolated',
@@ -587,20 +631,6 @@ class HedgerEngine(KolliderWsClient):
                     self.publish_msg(d, "getSythWallets")
                     continue
 
-                if action == "auth_hedger":
-                    d = {
-                        "status": "success"
-                    }
-                    if self.wst:
-                        self.logger.debug("closing websockets")
-                        self.ws.close()
-                        self.logger.debug("websockets closed")
-                    self.reconnect(self.settings["kollider"]["ws_url"])
-                    self.logger.debug("reconnected")
-                    self.set_jwt(data["token"])
-                    self.publish_msg(d, "authHedger")
-                    continue
-
                 if action == "make_conversion":
                     if data["is_staged"]:
                         estimation = self.estimate_conversion(data["amount_in_dollar"])
@@ -644,34 +674,8 @@ class HedgerEngine(KolliderWsClient):
                     self.publish_msg(d, "sendPayment")
                     continue
 
-                if action == "lnurl_auth":
-                    self.logger.debug("Performing lnurl auth.")
-                    decoded_url = lnurl.decode(data["lnurl"])
-                    try:
-                        res = self.lnd_client.sign_message(SEED_WORD)
-                        if res.signature == "":
-                            self.logger.error("Error on lnurl_auth: {}".format(e))
-                            d = {
-                                "status": "error"
-                            }
-                            self.publish_msg(d, "lnurlAuth")
-                            return
-                    except Exception as e:
-                        self.logger.error("Error on lnurl_auth: {}".format(e))
-                        d = {
-                            "status": "error"
-                        }
-                        self.publish_msg(d, "lnurlAuth")
-                        return
-                    lnurl_auth_signature = perform_lnurlauth(res.signature, decoded_url)
-                    try:
-                        _ = requests.get(lnurl_auth_signature)
-                        d = {
-                            "status": "success"
-                        }
-                        self.publish_msg(d, "lnurlAuth")
-                    except Exception as e:
-                        self.logger.error("Error on lnurl_auth: {}".format(e))
+                if action == "get_historical_trades":
+                    self.build_historical_trades_table()
                     continue
 
                 if action == "close_account":
@@ -705,6 +709,7 @@ class HedgerEngine(KolliderWsClient):
             # Don't do anything if we haven't received the contracts.
             if not self.received_tradable_symbols and not self.is_kollider_authenticated:
                 self.logger.debug("Not Kollider Authenticated")
+                self.authenticate_kollider()
                 sleep(cycle_speed)
                 continue
 

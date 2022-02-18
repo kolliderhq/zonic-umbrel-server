@@ -13,7 +13,6 @@
 	"target_fiat_currency": "USD",
 	"target_index_symbol": ".BTCUSD",
 	"target_symbol": "BTCUSD.PERP",
-	"target_leverage": 1000,
 	"cycle_speed": 5,
 	"order_type": "Market",
 	"log_level": "DEBUG"

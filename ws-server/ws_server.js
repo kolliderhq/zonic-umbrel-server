@@ -16,6 +16,7 @@ const MAKE_CONVERSION = "makeConversion";
 const AUTH_HEDGER = "authHedger";
 const CLOSE_ACCOUNT = "closeAccount";
 const LOGOUT = "logout";
+const GET_HISTORICAL_TRADES = "getHistoricalTrades";
 
 if (process.env.DEV) {
   ZMQ_HEDGER_PUB_ADDRESS = "tcp://127.0.0.1:5558";
@@ -100,19 +101,6 @@ pubSocket.bind(ZMQ_HEDGER_PUB_ADDRESS).then(_ => {
         const response = createResponse({ msg: "Please Authenticate." }, "error");
         ws.send(response.toString());
         return;
-      } else if (d.type === LNURL_AUTH) {
-        const msg = {
-          action: "lnurl_auth",
-          data: { lnurl: d.lnurl },
-        };
-        console.log("Sending lunrl auth request")
-        sendToBack(JSON.stringify(msg));
-      } else if (d.type === AUTH_HEDGER) {
-        const msg = {
-          action: "auth_hedger",
-          data: { token: d.token },
-        };
-        sendToBack(JSON.stringify(msg));
       } else if (d.type === GET_HEDGE_STATE) {
         const msg = {
           action: "get_hedge_state",
@@ -160,6 +148,11 @@ pubSocket.bind(ZMQ_HEDGER_PUB_ADDRESS).then(_ => {
           action: "close_account",
           data: {
           }
+        };
+        sendToBack(JSON.stringify(msg));
+      } else if (d.type === GET_HISTORICAL_TRADES) {
+        const msg = {
+          action: "get_historical_trades",
         };
         sendToBack(JSON.stringify(msg));
       } else if (d.type === LOGOUT) {
