@@ -17,6 +17,7 @@ const AUTH_HEDGER = "authHedger";
 const CLOSE_ACCOUNT = "closeAccount";
 const LOGOUT = "logout";
 const GET_HISTORICAL_TRADES = "getHistoricalTrades";
+const RESTART = "restart";
 
 if (process.env.DEV) {
   ZMQ_HEDGER_PUB_ADDRESS = "tcp://127.0.0.1:5558";
@@ -153,6 +154,11 @@ pubSocket.bind(ZMQ_HEDGER_PUB_ADDRESS).then(_ => {
       } else if (d.type === GET_HISTORICAL_TRADES) {
         const msg = {
           action: "get_historical_trades",
+        };
+        sendToBack(JSON.stringify(msg));
+      } else if (d.type === RESTART) {
+        const msg = {
+          action: "restart",
         };
         sendToBack(JSON.stringify(msg));
       } else if (d.type === LOGOUT) {

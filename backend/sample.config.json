@@ -1,6 +1,7 @@
 {
 	"kollider": {
-		"ws_url": "wss://api.kollider.xyz/v1/ws/"
+		"ws_url": "wss://api.kollider.xyz/v1/ws/",
+		"rest_url": "https://api.kollider.xyz/v1/"
 	},
 	"lnd": {
 		"node_url": "localhost:10009",
