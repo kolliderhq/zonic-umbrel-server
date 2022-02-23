@@ -28,7 +28,13 @@ class ReplaceClearnetUrl(Url):
 
 def main():
     lnurl.types.ClearnetUrl = ReplaceClearnetUrl
-    with open('config.json') as a:
+
+    env = environ.get("ENV")
+
+    file_name = env + "." + "config.json"
+    print(file_name)
+
+    with open(file_name) as a:
         settings = json.load(a)
 
     logger = setup_custom_logger("lnhedgehog", settings.get("log_level"))

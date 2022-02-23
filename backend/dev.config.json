@@ -1,0 +1,20 @@
+{
+    "cycle_speed": 5,
+    "kollider": {
+        "rest_url": "http://api.staging.kollider.internal/v1/",
+        "ws_url": "ws://api.staging.kollider.internal/v1/ws/"
+    },
+    "lnd": {
+        "admin_macaroon_path": "admin.macaroon",
+        "node_url": "10.0.1.138:10009",
+        "tls_path": "tls.cert"
+    },
+    "log_level": "DEBUG",
+    "order_type": "Market",
+    "settings_path": "dev.config.json",
+    "target_base_currency": "BTC",
+    "target_dollar_amount": 7,
+    "target_fiat_currency": "USD",
+    "target_index_symbol": ".BTCUSD",
+    "target_symbol": "BTCUSD.PERP"
+}
