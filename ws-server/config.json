@@ -1,0 +1,7 @@
+{
+	"ws_server_port": 8080,
+	"tls_path": "/lnd/tls.cert",
+	"macaroon_path": "/lnd/data/chain/bitcoin/mainnet/admin.macaroon",
+	"node_url": "",
+	"node_port": "10009"
+}
