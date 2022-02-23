@@ -4,7 +4,7 @@
 		"rest_url": "https://api.kollider.xyz/v1/"
 	},
 	"lnd": {
-		"node_url": "localhost:10009",
+		"node_url": "10.0.1.249:10009",
 		"admin_macaroon_path": "admin.macaroon",
 		"tls_path": "tls.cert"
 	},
