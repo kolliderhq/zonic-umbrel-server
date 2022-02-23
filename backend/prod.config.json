@@ -9,7 +9,6 @@
 		"tls_path": "tls.cert"
 	},
 	"hedge_proportion": 0.0025,
-	"hedge_side": "Bid",
 	"target_base_currency": "BTC",
 	"target_fiat_currency": "USD",
 	"target_index_symbol": ".BTCUSD",
