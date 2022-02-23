@@ -5,8 +5,8 @@
 	},
 	"lnd": {
 		"node_url": "10.0.1.138:10009",
-		"admin_macaroon_path": "admin.macaroon",
-		"tls_path": "tls.cert"
+		"admin_macaroon_path": "/lnd/data/chain/bitcoin/mainnet/admin.macaroon",
+		"tls_path": "/lnd/tls.cert"
 	},
 	"hedge_proportion": 0.0025,
 	"target_base_currency": "BTC",
