@@ -4,4 +4,3 @@ admin.macaroon
 */googleapis
 */__pycache__
 *.log
-config/*
