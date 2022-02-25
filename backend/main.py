@@ -31,8 +31,7 @@ def main():
 
     env = environ.get("ENV")
 
-    file_name = env + "." + "config.json"
-    print(file_name)
+    file_name = "config/" + env + "." + "config.json"
 
     with open(file_name) as a:
         settings = json.load(a)
