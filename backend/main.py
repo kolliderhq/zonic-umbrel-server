@@ -33,7 +33,7 @@ def main():
 
     file_name = "config/" + env + "." + "config.json"
 
-    with open(file_name) as a:
+    with open(file_name, 'w+') as a:
         settings = json.load(a)
 
     logger = setup_custom_logger("lnhedgehog", settings.get("log_level"))
