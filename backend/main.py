@@ -31,10 +31,18 @@ def main():
 
     env = environ.get("ENV")
 
-    file_name = "config/" + env + "." + "config.json"
+    file_name = env + "." + "config.json"
+    file_path = "config/" + file_name
 
-    with open(file_name, 'w+') as a:
-        settings = json.load(a)
+    settings = {}
+    try:
+        with open(file_path) as a:
+            settings = json.load(a)
+    except Exception as e:
+        print("No existing config file found.")
+        with open(file_name) as a:
+            settings = json.load(a)
+
 
     logger = setup_custom_logger("lnhedgehog", settings.get("log_level"))
 

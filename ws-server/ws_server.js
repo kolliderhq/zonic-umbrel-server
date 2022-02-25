@@ -55,7 +55,8 @@ const pubSocket = new zmq.Publisher();
 
 pubSocket.bind(ZMQ_HEDGER_PUB_ADDRESS).then(_ => {
   const sendToBack = (msg) => {
-    pubSocket.send(["hedger_pub_stream", msg])
+    pubSocket.send(["hedger_pub_stream", msg]).then(_ => {
+    })
   }
   wss.on("connection", function connection(ws) {
     let isAuthenticated = false;
@@ -154,6 +155,7 @@ pubSocket.bind(ZMQ_HEDGER_PUB_ADDRESS).then(_ => {
       } else if (d.type === GET_HISTORICAL_TRADES) {
         const msg = {
           action: "get_historical_trades",
+          data: {}
         };
         sendToBack(JSON.stringify(msg));
       } else if (d.type === RESTART) {

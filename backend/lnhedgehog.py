@@ -37,7 +37,7 @@ if os.environ.get('ZONIC_ZMQ_SUB_ADDRESS'):
 SEED_WORD = hashlib.sha256("cheers to you until all enternity and here is my entry ser. thi is for zonic.".encode("utf-8")).digest()
 
 def save_to_settings(settings):
-    with open(settings["settings_path"], 'w') as outfile:
+    with open(settings["settings_path"], 'w+') as outfile:
         json.dump(settings, outfile, indent=4, sort_keys=True)
 
 class HedgerEngine(KolliderWsClient):

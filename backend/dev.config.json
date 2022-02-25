@@ -11,7 +11,7 @@
     },
     "log_level": "DEBUG",
     "order_type": "Market",
-    "settings_path": "dev.config.json",
+    "settings_path": "config/dev.config.json",
     "target_base_currency": "BTC",
     "target_dollar_amount": 10,
     "target_fiat_currency": "USD",
