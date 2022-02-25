@@ -176,6 +176,9 @@ class HedgerEngine(KolliderWsClient):
         elif t == 'index_values':
             self.current_index_price = float(data["value"])
 
+        elif t == 'trade':
+            self.build_historical_trades_table()
+
         elif t == 'mark_prices':
             self.current_mark_price = float(data["price"])
 
@@ -608,6 +611,7 @@ class HedgerEngine(KolliderWsClient):
                 message = socket.recv_json()
                 print(message)
             except Exception as e:
+                print(e)
                 self.logger.debug("Error while receiving msg from zmq.")
                 continue
             if message.get("action") is not None:
