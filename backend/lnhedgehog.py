@@ -66,7 +66,7 @@ class HedgerEngine(KolliderWsClient):
         # Last hedge state.
         self.last_state = HedgerState()
 
-        # Summary of the connected node.
+        # Summary of the eonnected node.
         self.node_info = None
 
         # Order type that is used to make trades on Kollider.
@@ -151,6 +151,10 @@ class HedgerEngine(KolliderWsClient):
 
     def on_error(self, ctx, event):
         pass
+
+    def on_close(self, ctx, event, event2):
+        self.logger.error("WS closed!")
+        self.ws_is_open = False
 
     def on_message(self, _ctx, msg):
         msg = json.loads(msg)
@@ -266,6 +270,8 @@ class HedgerEngine(KolliderWsClient):
         elif t == 'error':
             self.logger.error("Got error: {}".format(msg))
 
+    ## Authenticate Kollider account with LNURL. It sets a jwt token and
+    ## reconnects the websockets.
     def authenticate_kollider(self):
         try:
             url = self.settings["kollider"]["rest_url"] + "auth/external/lnurl_auth"
@@ -303,11 +309,22 @@ class HedgerEngine(KolliderWsClient):
             print(e)
 
     def build_historical_trades_table(self):
-        resp = get_historical_trades(self.settings["kollider"]["rest_url"], self.jwt, "BTCUSD.PERP", 100)
-        response = {}
-        response["data"] = resp
-        response["symbol"] = "BTCUSD.PERP"
-        self.publish_msg(resp, "historicalTrades")
+        try:
+            resp = get_historical_trades(self.settings["kollider"]["rest_url"], self.jwt, "BTCUSD.PERP", 100)
+            status = resp.get("status")
+            data = resp.get("data")
+            if status == "success":
+                self.publish_msg(data, "historicalTrades")
+            elif status == "error":
+                if data == "unauthorized":
+                    self.logger.error("Kollider is not authenticated.")
+                    self.is_kollider_authenticated = False
+                    self.received_tradable_symbols = False
+                else:
+                    self.logger.error(data)
+        except Exception as e:
+            print(e.__dict__)
+            self.logger.error(e)
 
     def hydrate_client(self):
         self.publish_synth_wallets()
@@ -717,19 +734,26 @@ class HedgerEngine(KolliderWsClient):
                 cli_thread = threading.Thread(target=self.cli, daemon=True , args=())
                 cli_thread.start()
 
+            if not self.ws_is_open:
+                self.is_kollider_authenticated = False
+                self.received_tradable_symbols = False
+
             # Don't do anything if we haven't received the contracts.
             if not self.received_tradable_symbols and not self.is_kollider_authenticated:
-                self.logger.debug("Not Kollider Authenticated")
+                self.logger.debug("Not Kollider Authenticated or WS not connected.")
+                self.logger.info("Attempting to login and recreate WS connection.")
                 self.authenticate_kollider()
                 sleep(cycle_speed)
                 continue
 
             # Don't do anything if we haven't received mark or index price.
             if self.current_index_price == 0 or self.current_mark_price == 0:
+                sleep(cycle_speed)
                 continue
 
             # Don't do anything if we have no ticker price.
             if self.last_ticker.last_side is None:
+                sleep(cycle_speed)
                 continue
 
             self.update_master_wallet()

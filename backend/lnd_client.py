@@ -1,3 +1,4 @@
+from socket import timeout
 import lightning_pb2 as ln
 import lightning_pb2_grpc as lnrpc
 import grpc
@@ -24,7 +25,7 @@ class LndClient(object):
 	def sub_invoices(self, callback):
 		request = ln.InvoiceSubscription()
 		try:
-			for invoice in self.stub.SubscribeInvoices(request, metadata=[('macaroon', self.macaroon)]):
+			for invoice in self.stub.SubscribeInvoices(request, metadata=[('macaroon', self.macaroon)], timeout=10):
 				callback(invoice)
 		except Exception as err:
 			sleep(5)
@@ -33,13 +34,13 @@ class LndClient(object):
 			self.sub_invoices(callback)
 
 	def get_info(self):
-		return self.stub.GetInfo(ln.GetInfoRequest(), metadata=[('macaroon', self.macaroon)])
+		return self.stub.GetInfo(ln.GetInfoRequest(), metadata=[('macaroon', self.macaroon)], timeout=10)
 
 	def get_onchain_balance(self):
-		return self.stub.WalletBalance(ln.WalletBalanceRequest(), metadata=[('macaroon', self.macaroon)])
+		return self.stub.WalletBalance(ln.WalletBalanceRequest(), metadata=[('macaroon', self.macaroon)], timeout=10)
 
 	def get_channel_balances(self):
-		return self.stub.ChannelBalance(ln.ChannelBalanceRequest(), metadata=[('macaroon', self.macaroon)])
+		return self.stub.ChannelBalance(ln.ChannelBalanceRequest(), metadata=[('macaroon', self.macaroon)], timeout=10)
 
 	def send_payment(self, payment_request):
 		send_request = ln.SendRequest(payment_request=payment_request)
@@ -51,7 +52,7 @@ class LndClient(object):
 
 	def sign_message(self, msg):
 		message = ln.SignMessageRequest(msg=msg)
-		return self.stub.SignMessage(message, metadata=[('macaroon', self.macaroon)])
+		return self.stub.SignMessage(message, metadata=[('macaroon', self.macaroon)], timeout=10)
 
 
 if __name__ in "__main__":
