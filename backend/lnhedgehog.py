@@ -424,11 +424,11 @@ class HedgerEngine(KolliderWsClient):
         fill_price = 0
         ## User wants to buy contracts (Bitcoin) for dollars -> Ask Side.
         if amount_in_dollar < 0:
-            ob = self.orderbook.asks.items()
+            ob = reversed(self.orderbook.asks.items())
             for key, _ in ob:
                 fill_price = key
         else:
-            ob = reversed(self.orderbook.bids.items())
+            ob = self.orderbook.bids.items()
             for key, _ in ob:
                 fill_price = key
             
